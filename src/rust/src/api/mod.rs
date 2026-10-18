@@ -5,5 +5,6 @@ pub mod hotkeys;
 pub mod library;
 pub mod models;
 pub mod playback;
+pub mod plugins;
 pub mod simple;
 pub mod updates;

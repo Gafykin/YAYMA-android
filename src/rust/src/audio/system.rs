@@ -6,7 +6,7 @@ use crate::{
         queue::QueueManager, queue::as_wave_seed, signals::AudioSignals, state::SystemState,
         stream_manager::StreamManager, yandex::YandexProvider,
     },
-    http::{ApiService, LikedTracksSync, SessionExt},
+    http::{ApiService, SessionExt},
 };
 
 #[cfg(not(any(target_os = "android")))]
@@ -138,11 +138,8 @@ impl AudioSystem {
         {
             let mut db = db.lock().await;
             if let Ok(ids) = db.load_liked_tracks().await {
-                let revision: Option<u64> =
-                    db.load_setting("liked_tracks_revision").await.ok().flatten();
                 let mut state = state.write().await;
                 state.liked.set_liked_ids(ids);
-                state.liked.revision = revision;
                 signals.library_changed.send_replace(());
             }
         }
@@ -662,7 +659,7 @@ impl AudioSystem {
             self.controller
                 .play_track(next_track, false, Duration::ZERO, false)
                 .await;
-        } else {
+        } else if crate::audio::queue::AUTO_WAVE_FALLBACK {
             // Queue ended, start "My Wave"
             let yandex = self.yandex.clone();
             let generation = self.begin_context_change();
@@ -672,7 +669,13 @@ impl AudioSystem {
                     .await
                     .map_err(|e| format!("Failed to auto-start wave: {e}"))
             });
+        } else if matches!(reason, AdvanceReason::TrackEnded) {
+            // Плейлист/альбом доиграл: останавливаемся, а не прыгаем в «Мою волну».
+            self.begin_context_change();
+            self.controller.stop().await;
+            self.queue.clear();
         }
+        // «Далее» на последнем треке: ничего не делаем, трек играет дальше.
     }
 
     fn send_wave_feedback(
@@ -794,78 +797,21 @@ impl AudioSystem {
         signals: AudioSignals,
         db_arc: Arc<tokio::sync::Mutex<crate::db::AppDatabase>>,
     ) {
-        // Revision-gated sync (official-client style): when our revision is
-        // current the server answers `likedTracks: {info}` with no `values`
-        // → skip DB + rebuild entirely.
-        let revision = state.read().await.liked.revision;
-        match api.sync_liked_tracks_collection(revision).await {
-            Ok(outcome) => {
-                let (new_revision, count, ids) = match outcome {
-                    LikedTracksSync::Unchanged => {
-                        tracing::debug!("Liked tracks unchanged (revision {:?})", revision);
-                        return;
-                    }
-                    LikedTracksSync::Changed {
-                        revision: new_revision,
-                        liked_track_ids,
-                        disliked_track_ids,
-                    } => {
-                        // Belt and suspenders (the server should send no
-                        // `values` instead when unchanged).
-                        if Some(new_revision) == revision {
-                            return;
-                        }
-                        let count = liked_track_ids.len();
-                        {
-                            let mut state = state.write().await;
-                            state.liked.apply_liked_tracks(
-                                new_revision,
-                                liked_track_ids,
-                                disliked_track_ids,
-                            );
-                        }
-                        let ids = state.read().await.liked.ordered_snapshot().0;
-                        (new_revision, count, ids)
-                    }
-                };
+        if let Ok(ids) = api.fetch_liked_ids().await {
+            let count = ids.len();
 
-                let mut db = db_arc.lock().await;
-                let _ = db.save_liked_tracks(&ids).await;
-                let _ = db.save_setting("liked_tracks_revision", &new_revision).await;
-                drop(db);
+            let mut db = db_arc.lock().await;
+            let _ = db.save_liked_tracks(&ids).await;
 
-                signals.library_changed.send_replace(());
-
-                tracing::info!(
-                    "Synced {} liked track IDs (revision {:?} -> {})",
-                    count,
-                    revision,
-                    new_revision
-                );
+            {
+                let mut state = state.write().await;
+                state.liked.set_liked_ids(ids);
             }
-            Err(e) => {
-                tracing::warn!("Liked collection sync failed: {:?}", e);
-                // Legacy fallback (servers without collection/sync): full pull.
-                // No revision comes back, so the next sync retries the gated path.
-                match api.fetch_liked_ids().await {
-                    Ok(ids) => {
-                        let count = ids.len();
-                        {
-                            let mut state = state.write().await;
-                            state.liked.set_liked_ids(ids);
-                        }
-                        let liked_ids = state.read().await.liked.ordered_snapshot().0;
-                        let mut db = db_arc.lock().await;
-                        let _ = db.save_liked_tracks(&liked_ids).await;
-                        drop(db);
-                        signals.library_changed.send_replace(());
-                        tracing::info!("Synced {} liked track IDs (fallback full pull)", count);
-                    }
-                    Err(e) => {
-                        tracing::warn!("Liked fallback pull failed, keeping cache: {:?}", e);
-                    }
-                }
-            }
+            signals.library_changed.send_replace(());
+
+            tracing::info!("Synced {} liked track IDs directly from API", count);
+        } else {
+            tracing::warn!("Failed to fetch liked track IDs");
         }
     }
 }

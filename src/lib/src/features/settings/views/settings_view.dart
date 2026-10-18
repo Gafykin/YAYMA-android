@@ -14,6 +14,7 @@ import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/settings/views/lyrics_providers_dialog.dart';
+import 'package:yayma/src/features/settings/views/plugins_dialog.dart';
 import 'package:yayma/src/rust/api/content.dart' as rust;
 import 'package:yayma/src/rust/api/simple.dart' as simple;
 
@@ -428,6 +429,16 @@ class _SettingsViewState extends State<SettingsView> {
                         'Включённые источники для поиска синхронного текста, если у ',
                     icon: Icons.lyrics_rounded,
                     onTap: () => LyricsProvidersDialog.show(context),
+                  ),
+                  const SizedBox(height: 32),
+                  const _SectionTitle(title: 'Плагины'),
+                  const SizedBox(height: 20),
+                  _SettingItem(
+                    title: 'Плагины',
+                    subtitle:
+                        'Подмена аудио треков по списку (как аддон FckCensor)',
+                    icon: Icons.extension_rounded,
+                    onTap: () => PluginsDialog.show(context),
                   ),
                   const SizedBox(height: 32),
                   const _SectionTitle(title: 'Кэш'),

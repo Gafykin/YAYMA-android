@@ -13,6 +13,7 @@ pub mod db {
 mod frb_generated;
 pub mod http;
 pub mod lyrics;
+pub mod plugin_host;
 pub mod stream;
 pub mod util;
 

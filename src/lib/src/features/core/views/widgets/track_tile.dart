@@ -14,11 +14,11 @@ import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
 import 'package:yayma/src/features/core/views/widgets/download_menu.dart';
 import 'package:yayma/src/features/core/views/widgets/lyrics_view.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
-import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
 import 'package:yayma/src/features/core/views/widgets/track_details_dialog.dart';
 import 'package:yayma/src/features/core/views/widgets/track_elements.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
+import 'package:yayma/src/features/settings/views/plugins_dialog.dart';
 import 'package:yayma/src/rust/api/content.dart' as rust;
 import 'package:yayma/src/rust/api/models.dart';
 
@@ -34,6 +34,7 @@ class CommonTrackTile extends StatefulWidget {
   final VoidCallback? onTitleTap;
   final EdgeInsetsGeometry? contentPadding;
   final String? albumId;
+  final VoidCallback? onRemoveFromPlaylist;
 
   const CommonTrackTile({
     required this.trackId,
@@ -48,6 +49,7 @@ class CommonTrackTile extends StatefulWidget {
     this.onTitleTap,
     this.contentPadding,
     this.albumId,
+    this.onRemoveFromPlaylist,
   });
 
   @override
@@ -148,9 +150,7 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
         Widget buildContextMenu() {
           return SignalBuilder(
             builder: (watchContext) {
-              // Menu content is built lazily here; no subscription while
-              // the hosting tab is hidden.
-              final playlists = visibleSignal(watchContext, playlistsSignal);
+              final playlists = playlistsSignal.value;
               return AppContextMenu<String>(
                 onOpen: () => _isMenuOpen.value = true,
                 onClose: () {
@@ -184,6 +184,8 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                   }
 
                   switch (value) {
+                    case 'remove_from_playlist':
+                      widget.onRemoveFromPlaylist?.call();
                     case 'go_to_album':
                       if (widget.albumId != null) {
                         navigateTo(
@@ -204,6 +206,8 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                           widget.title,
                         ),
                       );
+                    case 'plugin_override':
+                      TrackOverrideDialog.show(context, widget.trackId, widget.title);
                     case 'about':
                       TrackDetailsDialog.show(
                         context,
@@ -253,6 +257,12 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                         )
                         .toList(),
                   ),
+                  if (widget.onRemoveFromPlaylist != null)
+                    const AppContextMenuItem(
+                      value: 'remove_from_playlist',
+                      label: 'Убрать из плейлиста',
+                      icon: Icons.playlist_remove_rounded,
+                    ),
                   if (widget.albumId != null)
                     const AppContextMenuItem(
                       value: 'go_to_album',
@@ -275,6 +285,11 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                     icon: Icons.waves_rounded,
                   ),
                   const AppContextMenuItem(
+                    value: 'plugin_override',
+                    label: 'Подменить аудио…',
+                    icon: Icons.swap_horiz_rounded,
+                  ),
+                  const AppContextMenuItem(
                     value: 'about',
                     label: 'О треке',
                     icon: Icons.info_outline_rounded,
@@ -295,10 +310,7 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                       ),
                     ],
                   ),
-                  if (visibleSignal(
-                    watchContext,
-                    downloadedTracksSignal,
-                  ).contains(widget.trackId))
+                  if (downloadedTracksSignal.value.contains(widget.trackId))
                     const AppContextMenuItem(
                       value: 'delete_downloaded',
                       label: 'Удалить из загрузок',
@@ -401,12 +413,9 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                                 onTap: widget.onTitleTap,
                                                 child: SignalBuilder(
                                                   builder: (context) {
-                                                    // No subscription while the hosting tab is hidden.
                                                     final isCurrent =
-                                                        visibleSignal(
-                                                              context,
-                                                              currentTrackIdSignal,
-                                                            ) ==
+                                                        currentTrackIdSignal
+                                                                .value ==
                                                             widget.trackId;
 
                                                     return ValueListenableBuilder<
@@ -461,17 +470,12 @@ class _CommonTrackTileState extends State<CommonTrackTile> {
                                           ),
                                           SignalBuilder(
                                             builder: (context) {
-                                              // No subscriptions while the hosting tab is hidden.
                                               final isDownloading =
-                                                  visibleSignal(
-                                                    context,
-                                                    downloadingTracksSignal,
-                                                  ).contains(widget.trackId);
+                                                  downloadingTracksSignal.value
+                                                      .contains(widget.trackId);
                                               final isDownloaded =
-                                                  visibleSignal(
-                                                    context,
-                                                    downloadedTracksSignal,
-                                                  ).contains(widget.trackId);
+                                                  downloadedTracksSignal.value
+                                                      .contains(widget.trackId);
 
                                               if (!isDownloading &&
                                                   !isDownloaded) {
@@ -563,11 +567,9 @@ class _LeadingPlayingBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return SignalBuilder(
       builder: (context) {
-        // No subscriptions while the hosting tab is hidden.
-        final isCurrent =
-            visibleSignal(context, currentTrackIdSignal) == trackId;
+        final isCurrent = currentTrackIdSignal.value == trackId;
         if (!isCurrent) return child;
-        final isPlaying = visibleSignal(context, isPlayingSignal);
+        final isPlaying = isPlayingSignal.value;
         final scheme = Theme.of(context).colorScheme;
         return Stack(
           clipBehavior: Clip.none,

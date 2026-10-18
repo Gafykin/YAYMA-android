@@ -128,6 +128,28 @@ pub async fn resolve_single_track_offline_or_remote(
         None
     };
     if let Some((tracks, index)) = local_ctx {
+        // Раньше скачанный трек из альбома/плейлиста становился очередью из ОДНОГО
+        // трека, и после него включалась «Моя волна». Теперь сначала пробуем загрузить
+        // весь список; нет сети — играем скачанный трек, как раньше.
+        if matches!(
+            source,
+            SingleTrackSource::AlbumTrack { .. } | SingleTrackSource::PlaylistTrack { .. }
+        ) {
+            let remote = tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                fetch_remote_for_source(&yandex, &source, &tid),
+            )
+            .await;
+            let result = match remote {
+                Ok(Ok(full)) => Ok(full),
+                _ => Ok((PlaybackContext::Standalone, tracks, index)),
+            };
+            let _ = tx
+                .send(AudioMessage::ContextFetched { generation, result })
+                .await;
+            return;
+        }
+
         let _ = tx
             .send(AudioMessage::LoadContext(
                 PlaybackContext::Standalone,

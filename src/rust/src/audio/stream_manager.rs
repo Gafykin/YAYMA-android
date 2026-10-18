@@ -159,7 +159,64 @@ impl StreamManager {
         self.track_cache.get_track_file(track_id).await.is_some()
     }
 
+    /// Поток для трека. Если плагин задаёт замену аудио (`crate::plugin_host`),
+    /// играем её; при любой ошибке откатываемся на обычный поток.
     pub async fn create_stream_session(&self, track: &Track) -> Result<PreparedStream> {
+        {
+            let mut cache = self.prewarm_cache.lock();
+            if let Some(res) = cache.remove(&track.id) {
+                return Ok(res);
+            }
+        }
+
+        if let Some(url) = crate::plugin_host::override_url(&track.id) {
+            match self.create_override_session(track, url).await {
+                Ok(session) => return Ok(session),
+                Err(e) => {
+                    tracing::warn!(track_id = %track.id, error = %e, "plugin_override_failed");
+                }
+            }
+        }
+
+        self.create_stream_session_default(track).await
+    }
+
+    /// Стрим mp3 по ссылке из плагина вместо оригинального файла трека.
+    async fn create_override_session(&self, track: &Track, url: String) -> Result<PreparedStream> {
+        let progress = Arc::new(TrackProgress::new());
+        let progress_clone = progress.clone();
+        let duration_ms = track.duration.map(|d| d.as_millis() as u64);
+        let buffering = stream::BufferingGate::new();
+
+        let data_source = stream::StreamingDataSource::new(
+            self.http_client.clone(),
+            url,
+            Vec::new(),
+            Arc::clone(&progress),
+            Arc::clone(&buffering),
+            duration_ms,
+        )
+        .await
+        .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e.to_string()))?;
+
+        let codec = "mp3".to_string();
+        let codec_clone = codec.clone();
+        let total_bytes = data_source.total_bytes();
+        let session = tokio::task::spawn_blocking(move || {
+            stream::create_streaming_session(data_source, total_bytes, codec_clone, progress_clone)
+        })
+        .await
+        .map_err(|e| Box::<dyn std::error::Error + Send + Sync>::from(e.to_string()))??;
+
+        Ok(PreparedStream {
+            session,
+            progress,
+            codec,
+            buffering,
+        })
+    }
+
+    async fn create_stream_session_default(&self, track: &Track) -> Result<PreparedStream> {
         {
             let mut cache = self.prewarm_cache.lock();
             if let Some(res) = cache.remove(&track.id) {

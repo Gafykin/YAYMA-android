@@ -31,6 +31,10 @@ const URL_PREFETCH_WINDOW: usize = 5;
 // loading wait for the whole playlist.
 const FETCH_THRESHOLD: usize = 10;
 
+/// true  — когда очередь закончилась, сама включается «Моя волна».
+/// false — плейлист/альбом доиграл и остановился; волна — только вручную.
+pub const AUTO_WAVE_FALLBACK: bool = false;
+
 /// Constructors for wave finish/skip feedback events.
 /// `skip_wave_track` and `wave_finish_track` differed only in
 /// `outcome`/`track_length`; both delegate here now.
