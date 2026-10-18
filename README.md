@@ -1,36 +1,61 @@
-# <img src="src/assets/icons/logo.svg" width="48" align="middle" alt="YAYMA" /> YAYMA (Yet Another Yandex Music App)
+<div align="center">
 
-![License](https://img.shields.io/github/license/DarkPlayOff/YAYMA)
-![Release](https://img.shields.io/github/v/release/DarkPlayOff/YAYMA)
-![Downloads](https://img.shields.io/github/downloads/DarkPlayOff/YAYMA/total)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20Android-lightgrey)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/DarkPlayOff/YAYMA)
+# 🎵 YAYMA — Yet Another Yandex Music App
 
-Альтернативный клиент для Яндекс Музыки
+[![Release Version](https://img.shields.io/badge/version-v2.5.2--mod2-ff5252?style=for-the-badge&logo=android)](https://github.com/Gafykin/YAYMA-android/releases/tag/1)
+[![Platform](https://img.shields.io/badge/Platform-Android-33d9b2?style=for-the-badge&logo=android)](https://github.com/Gafykin/YAYMA-android)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/ui_home.webp" width="280" alt="Главный экран"/></td>
-    <td align="center"><img src="docs/screenshots/ui_search.webp" width="280" alt="Поиск"/></td>
-    <td align="center"><img src="docs/screenshots/ui_artist.webp" width="280" alt="Страница исполнителя"/></td>
-  </tr>
-</table>
+<p align="center">
+  <b>Альтернативный, кастомный и стильный клиент Яндекс Музыки с расширенными возможностями и уникальным дизайном.</b>
+</p>
 
-## Предупреждение
+</div>
 
-**YAYMA** основан на [YaMusic](https://github.com/yamusic/yamusic) и использует неофициальное API, не предназначенное для публичного использования. Проект находится в стадии активной разработки. Пользуйтесь на свой страх и риск. Проект написан с помощью ИИ.
+---
 
-## Возможности
+## 📥 Скачать / Релизы
 
-- **Приватность**: никакой аналитики и слежки со стороны клиента
-- **Тексты песен**: несколько источников (LrcLib, BetterLyrics, YouLyPlus), включая пословную синхронизацию
-- **Интеграция с системой**: управление из панели задач Windows, Discord Rich Presence, глобальные горячие клавиши
+Получить самую свежую скомпилированную версию приложения можно по ссылке ниже:
 
-## Благодарности ❤️
+<div align="center">
 
-- [Vyfor](https://github.com/vyfor) — за исходный TUI-клиент [YaMusic](https://github.com/yamusic/yamusic) и библиотеку [yandex-music-rs](https://github.com/vyfor/yandex-music-rs) для работы с API Яндекса
-- [LrcLib](https://lrclib.net), [BetterLyrics](https://github.com/better-lyrics/better-lyrics), [YouLyPlus](https://github.com/ibratabian17/YouLyPlus) — за базы текстов песен
+[📦 **Скачать YAYMA v2.5.2-mod2 (APK)**](https://github.com/Gafykin/YAYMA-android/releases/tag/1)
 
-## Лицензия
+</div>
 
-Проект распространяется под лицензией [GPL-3.0](LICENSE).
+---
+
+## 📸 Скриншоты интерфейса
+
+<div align="center">
+  <img src="путь_к_первому_фото.jpg" width="30%" alt="Now Playing & Player UI" /> &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="путь_к_второму_фото.jpg" width="30%" alt="Plugins & Uncensor Settings" /> &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="путь_к_третьему_фото.jpg" width="30%" alt="Track Options Menu" />
+</div>
+
+*(Примечание: вы можете загрузить ваши изображения в репозиторий в папку `assets/screenshots/` и подставить точные пути вместо заглушек выше).*
+
+---
+
+## ✨ Особенности мода (v2.5.2-mod2)
+
+* **Улучшенный интерфейс (Mod UI):** Переработанные элементы управления, плавная анимация и стильная темная тема.
+* **Встроенный модуль «Антицензор» (FckCensor):** Возможность подменять аудиофайлы треков по кастомным спискам (например, обход цензуры и замена треков по ID)[cite: 4]. Гибкое управление списками прямо из приложения.
+* **Расширенное меню трека:** Быстрый доступ к скачиванию, текстам песен, копированию ссылок, созданию «Моей волны по треку» и ручной подмене аудиофайлов[cite: 5].
+* **Глубокая кастомизация:** Тонкая настройка размытия интерфейса, анимаций плеера и аудиоустройств.
+* **Высокое качество звука:** Полноценная поддержка lossless-форматов и детальная настройка воспроизведения.
+
+---
+
+## 🛠 Технологии
+
+Проект написан на современном стеке технологий:
+* **Flutter** — для создания красивого и отзывчивого пользовательского интерфейса.
+* **Rust (Flutter Rust Bridge v2)** — для максимальной производительности, работы с сетью, аудиопотоками и базами данных «под капотом».
+
+---
+
+## 💡 Поддержка и разработка
+
+Если вам нравится проект, вы можете поддержать его звездочкой на GitHub или предложить свои улучшения через Pull Requests!
