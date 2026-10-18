@@ -113,6 +113,13 @@ class _PluginsDialogState extends State<PluginsDialog> {
     await _run(() => rust.pluginInstallFromUrl(url: url));
   }
 
+  /// Готовый список замен сообщества FckCensor (формат {"tracks": {id: mp3}}).
+  static const _fckCensorUrl =
+      'https://raw.githubusercontent.com/Hazzz895/FckCensorData/refs/heads/main/list.json';
+
+  Future<void> _installFckCensor() =>
+      _run(() => rust.pluginInstallFromUrl(url: _fckCensorUrl));
+
   Future<void> _installFromFile() async {
     final files = await FilePicker.pickFiles(
       type: FileType.custom,
@@ -240,6 +247,12 @@ class _PluginsDialogState extends State<PluginsDialog> {
                       onPressed: _busy ? null : () => unawaited(_installFromUrl()),
                       icon: const Icon(Icons.link_rounded),
                       label: const Text('По ссылке'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed:
+                          _busy ? null : () => unawaited(_installFckCensor()),
+                      icon: const Icon(Icons.volume_up_rounded),
+                      label: const Text('FckCensor'),
                     ),
                     OutlinedButton.icon(
                       onPressed: _busy ? null : () => unawaited(_installFromFile()),

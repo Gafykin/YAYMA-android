@@ -84,6 +84,9 @@ fn install_text(text: &str, fallback_name: &str, source_url: Option<String>) -> 
 }
 
 fn name_from_url(url: &str) -> String {
+    if url.to_lowercase().contains("fckcensor") {
+        return "FckCensor".to_string();
+    }
     let path = url.split(['?', '#']).next().unwrap_or(url);
     let last = path.rsplit('/').find(|s| !s.is_empty()).unwrap_or("plugin");
     last.trim_end_matches(".json").to_string()
