@@ -29,7 +29,7 @@
 ## 📸 Скриншоты интерфейса
 
 <div align="center">
-  <img src="путь_к_первому_фото.jpg" width="30%" alt="Now Playing & Player UI" /> &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="png/photo_1_2026-10-18_20-23-59.jpg" width="30%" alt="Now Playing & Player UI" /> &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="путь_к_второму_фото.jpg" width="30%" alt="Plugins & Uncensor Settings" /> &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="путь_к_третьему_фото.jpg" width="30%" alt="Track Options Menu" />
 </div>
