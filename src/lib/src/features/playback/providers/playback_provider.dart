@@ -20,6 +20,24 @@ import 'package:yayma/src/rust/api/playback.dart' as rust;
 import 'package:yayma/src/rust/api/simple.dart' as rust;
 import 'package:yayma/src/rust/lib.dart';
 
+// После лайка/снятия лайка принудительно пересобираем список «Любимое».
+// Два прохода: быстрый (оптимистичное состояние) и поздний — после того, как
+// Rust сверился с сервером (при ошибке запроса он откатывает/досинхронизирует).
+Timer? _likedRefreshQuickTimer;
+Timer? _likedRefreshLateTimer;
+
+void _scheduleLikedListRefresh() {
+  void run() {
+    final q = librarySearchQuerySignal.value;
+    unawaited(refreshLikedTracks(query: q.isEmpty ? null : q, force: true));
+  }
+
+  _likedRefreshQuickTimer?.cancel();
+  _likedRefreshLateTimer?.cancel();
+  _likedRefreshQuickTimer = Timer(const Duration(milliseconds: 600), run);
+  _likedRefreshLateTimer = Timer(const Duration(seconds: 4), run);
+}
+
 // Player state signals
 final FlutterSignal<PlaybackState?> playerStateSignal = signal<PlaybackState?>(
   null,
@@ -607,24 +625,9 @@ class PlaybackController {
   static Future<void> toggleRepeat() =>
       runRustAction((ctx) => rust.toggleRepeatMode(ctx: ctx));
   static Future<void> stop() => runRustAction((ctx) => rust.stop(ctx: ctx));
-  static Future<void> toggleLike({required String trackId}) {
-    // Optimistic list update (instant); the Rust stream reconciles after.
-    // Unlike works by id; insertion needs the DTO: current queue first,
-    // then the liked cache (re-like).
-    final baseId = trackId.split(':').first;
-    SimpleTrackDto? dto;
-    try {
-      final queue = queueTracksSignal.value.value ?? const <SimpleTrackDto>[];
-      for (final t in queue) {
-        if (t.id.split(':').first == baseId) {
-          dto = t;
-          break;
-        }
-      }
-    } on Object catch (_) {}
-    dto ??= findLikedDto(baseId);
-    applyLikeOptimistic(trackId: trackId, track: dto);
-    return runRustAction((ctx) => rust.toggleLike(ctx: ctx, trackId: trackId));
+  static Future<void> toggleLike({required String trackId}) async {
+    await runRustAction((ctx) => rust.toggleLike(ctx: ctx, trackId: trackId));
+    _scheduleLikedListRefresh();
   }
   static Future<void> toggleDislike({required String trackId}) =>
       runRustAction((ctx) => rust.toggleDislike(ctx: ctx, trackId: trackId));

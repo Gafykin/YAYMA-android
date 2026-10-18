@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:material_ui/material_ui.dart';
 import 'package:yayma/src/app/session.dart';
-import 'package:yayma/src/features/core/utils/lru_map.dart';
 import 'package:yayma/src/rust/api/simple.dart';
 
 /// Cover size presets Yandex's avatar CDN actually serves, per the official
@@ -73,7 +72,7 @@ class RustCachedImage extends StatefulWidget {
 }
 
 class _RustCachedImageState extends State<RustCachedImage> {
-  static final LruMap<String, String> _pathCache = LruMap(maximumSize: 400);
+  static final Map<String, String> _pathCache = {};
   String? _resolvedPath;
   late bool _isLoading;
   String? _lastUrl;
@@ -92,9 +91,8 @@ class _RustCachedImageState extends State<RustCachedImage> {
       return;
     }
 
-    final cached = _pathCache[url];
-    if (cached != null) {
-      _resolvedPath = cached;
+    if (_pathCache.containsKey(url)) {
+      _resolvedPath = _pathCache[url];
       _isLoading = false;
       return;
     }
@@ -332,42 +330,29 @@ class _ShimmerLoaderState extends State<_ShimmerLoader>
       borderRadius: widget.borderRadius > 0
           ? BorderRadius.circular(widget.borderRadius)
           : BorderRadius.zero,
-      child: RepaintBoundary(
-        child: CustomPaint(
-          painter: _ShimmerPainter(animation: _animation),
-          child: Container(
+      child: AnimatedBuilder(
+        animation: _animation,
+        builder: (context, child) {
+          return Container(
             width: widget.width,
             height: widget.height,
-            decoration: const BoxDecoration(),
-          ),
-        ),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment(_animation.value, 0),
+                end: Alignment(_animation.value + 0.5, 0),
+                colors: const [
+                  Color(0xFF2A2A2A),
+                  Color(0xFF3A3A3A),
+                  Color(0xFF4A4A4A),
+                  Color(0xFF3A3A3A),
+                  Color(0xFF2A2A2A),
+                ],
+                stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
-}
-
-class _ShimmerPainter extends CustomPainter {
-  _ShimmerPainter({required this.animation}) : super(repaint: animation);
-  final Animation<double> animation;
-  final Paint _paint = Paint();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    _paint.shader = LinearGradient(
-      begin: Alignment(animation.value, 0),
-      end: Alignment(animation.value + 0.5, 0),
-      colors: const [
-        Color(0xFF2A2A2A),
-        Color(0xFF3A3A3A),
-        Color(0xFF4A4A4A),
-        Color(0xFF3A3A3A),
-        Color(0xFF2A2A2A),
-      ],
-      stops: const [0.0, 0.35, 0.5, 0.65, 1.0],
-    ).createShader(Offset.zero & size);
-    canvas.drawRect(Offset.zero & size, _paint);
-  }
-
-  @override
-  bool shouldRepaint(_ShimmerPainter oldDelegate) => false;
 }

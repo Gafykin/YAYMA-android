@@ -9,8 +9,8 @@ import 'package:yayma/src/features/core/views/widgets/home_cover_widget.dart';
 import 'package:yayma/src/features/core/views/widgets/lyrics_view.dart';
 import 'package:yayma/src/features/core/views/widgets/quality_selector.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
-import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
 import 'package:yayma/src/features/core/views/widgets/track_elements.dart';
+import 'package:yayma/src/features/library/views/add_to_playlist_dialog.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/features/playback/views/wave_view.dart';
 import 'package:yayma/src/rust/api/models.dart';
@@ -26,8 +26,7 @@ class HomeView extends StatelessWidget {
           builder: (context) {
             final height = constraints.maxHeight;
             final width = constraints.maxWidth;
-            // No subscription while the tab is hidden.
-            final showLyrics = visibleSignal(context, showLyricsSignal);
+            final showLyrics = showLyricsSignal.value;
 
             var verticalSpacing = 40.0;
             var trackHeaderSpacing = 32.0;
@@ -154,10 +153,7 @@ class HomeView extends StatelessWidget {
                               Positioned.fill(
                                 child: SignalBuilder(
                                   builder: (context) {
-                                    final trackId = visibleSignal(
-                                      context,
-                                      trackMetadataSignal,
-                                    ).id;
+                                    final trackId = trackMetadataSignal().id;
                                     if (trackId == null) {
                                       return Center(
                                         child: Text(
@@ -239,8 +235,7 @@ class _HomeTrackHeaderState extends State<_HomeTrackHeader> {
   Widget build(BuildContext context) {
     return SignalBuilder(
       builder: (context) {
-        // No subscription while the tab is hidden.
-        final meta = visibleSignal(context, trackMetadataSignal);
+        final meta = trackMetadataSignal();
 
         return Column(
           crossAxisAlignment: widget.isNarrow
@@ -343,6 +338,30 @@ class _HomeTrackHeaderState extends State<_HomeTrackHeader> {
   }
 }
 
+void _addCurrentTrackToPlaylist(BuildContext context) {
+  final track = playerStateSignal.value?.currentTrack;
+  if (track == null) return;
+  unawaited(AddToPlaylistDialog.show(context, track));
+}
+
+class _AddToPlaylistButton extends StatelessWidget {
+  final double size;
+  const _AddToPlaylistButton({this.size = 24});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Добавить в плейлист',
+      icon: Icon(
+        Icons.playlist_add_rounded,
+        size: size,
+        color: Theme.of(context).colorScheme.onSurfaceVariant,
+      ),
+      onPressed: () => _addCurrentTrackToPlaylist(context),
+    );
+  }
+}
+
 class _HomeMainControls extends StatelessWidget {
   final bool showLyrics;
   final bool small;
@@ -358,17 +377,13 @@ class _HomeMainControls extends StatelessWidget {
   Widget build(BuildContext context) {
     return SignalBuilder(
       builder: (context) {
-        // No subscriptions while the tab is hidden; fresh values are
-        // picked up by the single rebuild when the tab opens.
-        final trackId = visibleSignal(context, trackMetadataSignal).id;
-        final isPlaying = visibleSignal(context, isPlayingSignal);
-        final isLiked = visibleSignal(context, isLikedSignal);
-        final isDisliked = visibleSignal(context, isDislikedSignal);
-        final isShuffled = visibleSignal(context, isShuffledSignal);
-        final repeatMode = visibleSignal(context, repeatModeSignal);
-        // Frozen tab: no accent subscription while hidden, so track/color
-        // changes don't rebuild it. The fresh value is picked up on open.
-        final accentColor = visibleSignal<Color>(context, accentColorSignal);
+        final trackId = trackMetadataSignal().id;
+        final isPlaying = isPlayingSignal();
+        final isLiked = isLikedSignal();
+        final isDisliked = isDislikedSignal();
+        final isShuffled = isShuffledSignal();
+        final repeatMode = repeatModeSignal();
+        final accentColor = accentColorSignal.value;
         final scheme = Theme.of(context).colorScheme;
         final onSurface = scheme.onSurface;
         final onSurfaceVariant = scheme.onSurfaceVariant;
@@ -469,6 +484,7 @@ class _HomeMainControls extends StatelessWidget {
                         onPressed: () =>
                             unawaited(PlaybackController.toggleShuffle()),
                       ),
+                      const _AddToPlaylistButton(),
                     ],
                   ),
                   if (Platform.isAndroid) const _WaveSettingsButton(),
@@ -571,7 +587,9 @@ class _HomeMainControls extends StatelessWidget {
                         )
                       : null,
                 ),
-                SizedBox(width: small ? 8 : 12),
+                SizedBox(width: small ? 4 : 8),
+                _AddToPlaylistButton(size: small ? 22 : 26),
+                SizedBox(width: small ? 4 : 8),
                 IconButton(
                   icon: Icon(
                     repeatIcon,

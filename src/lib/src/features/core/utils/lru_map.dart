@@ -13,16 +13,10 @@ import 'dart:collection';
 /// a substitute for a bounded multi-key cache — hence this small helper
 /// instead of a new third-party dependency.
 final class LruMap<K, V> with MapMixin<K, V> {
-  LruMap({required this.maximumSize, this.onEvict})
+  LruMap({required this.maximumSize})
     : assert(maximumSize > 0, 'maximumSize must be positive');
 
   final int maximumSize;
-
-  /// Called for every entry dropped by eviction (the `[]=` overflow path),
-  /// [remove] and [clear]. Not called when `[]=` merely replaces an entry's
-  /// value — replacement is the caller's lifetime to manage.
-  final void Function(K key, V value)? onEvict;
-
   final LinkedHashMap<K, V> _entries = LinkedHashMap();
 
   @override
@@ -39,9 +33,7 @@ final class LruMap<K, V> with MapMixin<K, V> {
     _entries.remove(key);
     _entries[key] = value;
     while (_entries.length > maximumSize) {
-      final evictedKey = _entries.keys.first;
-      final evicted = _entries.remove(evictedKey);
-      if (evicted != null) onEvict?.call(evictedKey, evicted);
+      _entries.remove(_entries.keys.first);
     }
   }
 
@@ -49,25 +41,11 @@ final class LruMap<K, V> with MapMixin<K, V> {
   V? peek(K key) => _entries[key];
 
   @override
-  V? remove(Object? key) {
-    final value = _entries.remove(key);
-    if (value != null) onEvict?.call(key as K, value);
-    return value;
-  }
+  V? remove(Object? key) => _entries.remove(key);
 
   @override
   Iterable<K> get keys => _entries.keys;
 
   @override
-  void clear() {
-    if (onEvict == null) {
-      _entries.clear();
-      return;
-    }
-    final dropped = List.of(_entries.entries);
-    _entries.clear();
-    for (final entry in dropped) {
-      onEvict!.call(entry.key, entry.value);
-    }
-  }
+  void clear() => _entries.clear();
 }

@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/rendering.dart';
 import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
@@ -12,7 +11,6 @@ import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
 import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
 import 'package:yayma/src/features/core/views/widgets/download_menu.dart';
 import 'package:yayma/src/features/core/views/widgets/media_card.dart';
-import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
 import 'package:yayma/src/features/core/views/widgets/track_tile.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
@@ -46,8 +44,8 @@ class _LibraryViewState extends State<LibraryView>
             force: true,
           );
           // refreshLikedTracks only subscribes to the stream, so wait for
-          // the actual load to finish (huge libraries stream for a while).
-          for (var i = 0; i < 300; i++) {
+          // the actual load to finish.
+          for (var i = 0; i < 50; i++) {
             await Future<void>.delayed(const Duration(milliseconds: 100));
             if (!isLibraryLoadingSignal.value) break;
           }
@@ -397,9 +395,8 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
     final query = librarySearchQuerySignal.value;
     await refreshLikedTracks(query: query.isEmpty ? null : query, force: true);
     // refreshLikedTracks only subscribes to the stream, so wait for
-    // the actual load to finish to keep the spinner visible (huge
-    // libraries stream for a while).
-    for (var i = 0; i < 300; i++) {
+    // the actual load to finish to keep the spinner visible.
+    for (var i = 0; i < 50; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 100));
       if (!isLibraryLoadingSignal.value) break;
     }
@@ -413,12 +410,11 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
     return SignalBuilder(
       builder: (context) {
         final cs = Theme.of(context).colorScheme;
-        // No subscriptions while the tab is hidden.
-        final tracks = visibleSignal(context, likedTracksSignal);
-        final query = visibleSignal(context, librarySearchQuerySignal);
-        final isLoading = visibleSignal(context, isLibraryLoadingSignal);
-        final loaded = visibleSignal(context, likedTracksLoadedSignal);
-        final expected = visibleSignal(context, likedTracksExpectedSignal);
+        final tracks = likedTracksSignal.value;
+        final query = librarySearchQuerySignal.value;
+        final isLoading = isLibraryLoadingSignal.value;
+        final loaded = likedTracksLoadedSignal.value;
+        final expected = likedTracksExpectedSignal.value;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -477,15 +473,9 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                   const SizedBox(width: 12),
                   SignalBuilder(
                     builder: (context) {
-                      // No subscriptions while the tab is hidden.
-                      final isDownloading = visibleSignal(
-                        context,
-                        isDownloadingAllLikedTracksSignal,
-                      );
-                      final downloadedTracks = visibleSignal(
-                        context,
-                        downloadedTracksSignal,
-                      );
+                      final isDownloading =
+                          isDownloadingAllLikedTracksSignal.value;
+                      final downloadedTracks = downloadedTracksSignal.value;
                       final allDownloaded =
                           tracks.isNotEmpty &&
                           tracks.every((t) => downloadedTracks.contains(t.id));
@@ -579,8 +569,6 @@ class _LikedTracksTabState extends State<_LikedTracksTab> {
                         haptic: M3EHapticFeedback.light,
                         physics: const AlwaysScrollableScrollPhysics(),
                         itemCount: tracks.length,
-                        addAutomaticKeepAlives: false,
-                        cacheExtent: 500,
                         listPadding: const EdgeInsets.only(bottom: 140),
                         margin: EdgeInsets.symmetric(
                           horizontal: isNarrow ? 0 : 40,
@@ -730,8 +718,7 @@ class _PlaylistsTab extends StatelessWidget {
 
     return SignalBuilder(
       builder: (context) {
-        // No subscription while the tab is hidden.
-        final playlists = visibleSignal(context, playlistsSignal);
+        final playlists = playlistsSignal.value;
 
         if (playlists.isEmpty) {
           return AppRefreshIndicator(
@@ -761,8 +748,6 @@ class _PlaylistsTab extends StatelessWidget {
           onRefresh: refreshPlaylists,
           child: GridView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
-            addAutomaticKeepAlives: false,
-            scrollCacheExtent: const ScrollCacheExtent.pixels(500),
             padding: EdgeInsets.fromLTRB(
               isNarrow ? 20 : 40,
               isNarrow ? 20 : 40,
@@ -797,8 +782,7 @@ class _LikedAlbumsTab extends StatelessWidget {
 
     return SignalBuilder(
       builder: (context) {
-        // No subscription while the tab is hidden.
-        final albums = visibleSignal(context, likedAlbumsSignal);
+        final albums = likedAlbumsSignal.value;
 
         if (albums.isEmpty) {
           return AppRefreshIndicator(
@@ -828,8 +812,6 @@ class _LikedAlbumsTab extends StatelessWidget {
           onRefresh: refreshLikedAlbums,
           child: GridView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
-            addAutomaticKeepAlives: false,
-            scrollCacheExtent: const ScrollCacheExtent.pixels(500),
             padding: EdgeInsets.fromLTRB(
               isNarrow ? 12 : 32,
               isNarrow ? 12 : 24,
@@ -885,8 +867,7 @@ class _LikedArtistsTab extends StatelessWidget {
 
     return SignalBuilder(
       builder: (context) {
-        // No subscription while the tab is hidden.
-        final artists = visibleSignal(context, likedArtistsSignal);
+        final artists = likedArtistsSignal.value;
 
         if (artists.isEmpty) {
           return AppRefreshIndicator(
@@ -916,8 +897,6 @@ class _LikedArtistsTab extends StatelessWidget {
           onRefresh: refreshLikedArtists,
           child: GridView.builder(
             physics: const AlwaysScrollableScrollPhysics(),
-            addAutomaticKeepAlives: false,
-            scrollCacheExtent: const ScrollCacheExtent.pixels(500),
             padding: EdgeInsets.fromLTRB(
               isNarrow ? 12 : 32,
               isNarrow ? 12 : 24,

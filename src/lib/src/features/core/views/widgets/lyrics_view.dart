@@ -6,7 +6,6 @@ import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
-import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
 import 'package:yayma/src/features/playback/providers/lyrics_provider.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 
@@ -525,14 +524,9 @@ class _KaraokeLineText extends StatelessWidget {
     }
 
     return SignalBuilder(
-      // The active line follows playback, but not while the hosting tab
-      // is hidden: peeked progress doesn't subscribe the builder.
       builder: (context) => _KaraokeLine(
         words: line.words!,
-        currentMs: visibleSignal(
-          context,
-          trackProgressSignal,
-        ).positionMs.toInt(),
+        currentMs: trackProgressSignal.value.positionMs.toInt(),
         lineActive: true,
       ),
     );
@@ -702,8 +696,7 @@ class _LyricTimerWidgetState extends State<_LyricTimerWidget>
     return SignalBuilder(
       builder: (context) {
         final cs = Theme.of(context).colorScheme;
-        // No progress subscription while the hosting tab is hidden.
-        final progress = visibleSignal(context, trackProgressSignal);
+        final progress = trackProgressSignal.value;
         final currentMs = progress.positionMs.toInt();
         final remainingMs =
             (widget.item.time.inMilliseconds +

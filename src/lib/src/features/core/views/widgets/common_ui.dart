@@ -8,7 +8,6 @@ import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/views/widgets/app_context_menu.dart';
 import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
 import 'package:yayma/src/features/core/views/widgets/responsive.dart';
-import 'package:yayma/src/features/core/views/widgets/tab_visibility.dart';
 import 'package:yayma/src/features/core/views/widgets/track_elements.dart';
 import 'package:yayma/src/features/playback/providers/playback_provider.dart';
 import 'package:yayma/src/rust/api/models.dart';
@@ -356,8 +355,7 @@ class _AudioDeviceButtonState extends State<AudioDeviceButton> {
       builder: (context) {
         final devices = audioDevicesSignal.value;
         final selectedDevice = selectedAudioDeviceSignal.value;
-        // No accent subscription while the hosting tab is hidden.
-        final accentColor = visibleSignal<Color>(context, accentColorSignal);
+        final accentColor = accentColorSignal.value;
 
         final items = [
           AppContextMenuItem<String>(
@@ -585,9 +583,7 @@ class _CommonProgressSliderState extends State<CommonProgressSlider> {
           final trackHeight = widget.compact ? 4.0 : 6.0;
           final thumbRadius = widget.compact ? 4.0 : 6.0;
           final fontSize = widget.compact ? 11.0 : 12.0;
-          // No accent subscription while the hosting tab is hidden.
-          final accentColor =
-              widget.accentColor ?? visibleSignal<Color>(context, accentColorSignal);
+          final accentColor = widget.accentColor ?? accentColorSignal.value;
           final onSurfaceVariant = Theme.of(
             context,
           ).colorScheme.onSurfaceVariant;
