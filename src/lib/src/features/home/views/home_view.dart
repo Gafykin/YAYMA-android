@@ -322,15 +322,34 @@ class _HomeTrackHeaderState extends State<_HomeTrackHeader> {
               ),
             ),
             const SizedBox(height: 8),
-            ArtistNamesWidget(
-              artists: meta.artists,
-              fontSize: widget.small
-                  ? (widget.isNarrow ? 12 : 16)
-                  : (widget.isNarrow ? 14 : 22),
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.6),
-            ),
+            if (widget.isNarrow)
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: widget.maxWidth),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: ArtistNamesWidget(
+                        artists: meta.artists,
+                        fontSize: widget.small ? 12 : 14,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const _AddToPlaylistButton(size: 22, compact: true),
+                  ],
+                ),
+              )
+            else
+              ArtistNamesWidget(
+                artists: meta.artists,
+                fontSize: widget.small ? 16 : 22,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
           ],
         );
       },
@@ -346,12 +365,18 @@ void _addCurrentTrackToPlaylist(BuildContext context) {
 
 class _AddToPlaylistButton extends StatelessWidget {
   final double size;
-  const _AddToPlaylistButton({this.size = 24});
+  final bool compact;
+  const _AddToPlaylistButton({this.size = 24, this.compact = false});
 
   @override
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: 'Добавить в плейлист',
+      padding: compact ? EdgeInsets.zero : null,
+      constraints: compact
+          ? const BoxConstraints.tightFor(width: 36, height: 36)
+          : null,
+      visualDensity: compact ? VisualDensity.compact : null,
       icon: Icon(
         Icons.playlist_add_rounded,
         size: size,
@@ -484,7 +509,6 @@ class _HomeMainControls extends StatelessWidget {
                         onPressed: () =>
                             unawaited(PlaybackController.toggleShuffle()),
                       ),
-                      const _AddToPlaylistButton(),
                     ],
                   ),
                   if (Platform.isAndroid) const _WaveSettingsButton(),
