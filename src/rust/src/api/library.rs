@@ -6,7 +6,6 @@ use crate::app::AppContext;
 use crate::frb_generated::StreamSink;
 use crate::util::track::{CleanId, like_entity_id};
 use foldhash::HashMapExt;
-use futures::StreamExt;
 
 /// Resolves the full `"id:album"` entity id for like/unlike HTTP requests.
 ///
@@ -72,6 +71,7 @@ pub async fn toggle_like(ctx: &AppContext, track_id: String) {
     let db = ctx.core.db.clone();
     let expected = !is_liked;
     let entity_id = resolve_like_entity_id(ctx, &track_id).await;
+    let ctx_for_events = ctx.clone();
     tokio::spawn(async move {
         let api_result = if is_liked {
             api.remove_like_track(entity_id.clone()).await
@@ -86,15 +86,18 @@ pub async fn toggle_like(ctx: &AppContext, track_id: String) {
                     crate::audio::commands::AudioMessage::WaveLike(track_id)
                 };
                 let _ = audio_tx.send(msg).await;
-                // Reconcile the optimistic cache with server truth (concurrent
-                // edits from another client, partial failures). Cheap when in
-                // sync: the stream dedups identical id sets and skips rebuild.
-                let _ = audio_tx
-                    .send(crate::audio::commands::AudioMessage::SyncLiked)
-                    .await;
             }
             Err(e) => {
                 tracing::warn!("toggle_like API failed, rolling back: {:?}", e);
+                // Сообщаем пользователю, а не молча откатываем «лайк».
+                ctx_for_events.send_event(crate::api::simple::AppEvent::Notification(
+                    "Любимое".to_string(),
+                    if is_liked {
+                        "Не удалось убрать трек из любимых".to_string()
+                    } else {
+                        "Не удалось добавить трек в любимые".to_string()
+                    },
+                ));
                 // Don't overwrite a newer user action: roll back only if the
                 // current status still equals the optimistic value.
                 let should_rollback = {
@@ -121,6 +124,12 @@ pub async fn toggle_like(ctx: &AppContext, track_id: String) {
                     signals.library_changed.send_replace(());
                     signals.changed.send_replace(());
                 }
+                // Сервер мог принять запрос, даже если ответ не разобрался:
+                // через секунду сверяем локальный список с сервером.
+                tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                let _ = audio_tx
+                    .send(crate::audio::commands::AudioMessage::SyncLiked)
+                    .await;
             }
         }
     });
@@ -645,28 +654,16 @@ async fn fetch_and_save_missing_metadata(
         return;
     }
 
-    // Huge libraries can miss thousands of metadata rows (cold DB after
-    // reinstall): fetch 50-chunks concurrently instead of one round-trip
-    // at a time. DB writes stay sequential under a single lock hold.
-    let api = ctx.core.api.clone();
-    let chunks: Vec<Vec<String>> = missing_ids.chunks(50).map(|c| c.to_vec()).collect();
-    let fetched: Vec<Vec<yandex_music::model::track::Track>> =
-        futures::stream::iter(chunks.into_iter().map(|chunk| {
-            let api = api.clone();
-            async move { api.fetch_tracks(chunk).await.ok().unwrap_or_default() }
-        }))
-        .buffer_unordered(4)
-        .collect()
-        .await;
-
-    let mut db = ctx.core.db.lock().await;
-    for tracks in fetched {
-        for t in tracks {
-            let metadata_to_save = yandex_track_to_metadata(t);
-            if let Err(e) = db.upsert_track_metadata(metadata_to_save.clone()).await {
-                tracing::error!("Failed to upsert track metadata in DB: {:?}", e);
+    for chunk in missing_ids.chunks(50) {
+        if let Ok(tracks) = ctx.core.api.fetch_tracks(chunk.to_vec()).await {
+            let mut db = ctx.core.db.lock().await;
+            for t in tracks {
+                let metadata_to_save = yandex_track_to_metadata(t);
+                if let Err(e) = db.upsert_track_metadata(metadata_to_save.clone()).await {
+                    tracing::error!("Failed to upsert track metadata in DB: {:?}", e);
+                }
+                metadata_map.insert(metadata_to_save.id.clone(), metadata_to_save);
             }
-            metadata_map.insert(metadata_to_save.id.clone(), metadata_to_save);
         }
     }
 }
@@ -853,22 +850,6 @@ pub async fn liked_tracks_stream(
     let mut last_sent_disliked: foldhash::HashSet<String> = foldhash::HashSet::default();
     let mut last_sent_count: usize = 0;
     let mut first_run = true;
-
-    // Pull-to-refresh resubscribes: without a fresh server snapshot the
-    // rebuild below would just re-emit the stale LikedCache (likes added
-    // in another client appear only after restart / the 300s worker sync).
-    // Freshen inline; on failure sync keeps the cached snapshot, so this
-    // stays offline-safe. Filtered (search) subscriptions skip the network
-    // round-trip and read the snapshot.
-    if query_lower.is_none() {
-        crate::audio::system::AudioSystem::sync_liked_collection_with(
-            ctx.core.api.clone(),
-            ctx.audio.state.clone(),
-            ctx.audio.signals.clone(),
-            ctx.core.db.clone(),
-        )
-        .await;
-    }
 
     loop {
         let (liked_ids, disliked_ids_set) =

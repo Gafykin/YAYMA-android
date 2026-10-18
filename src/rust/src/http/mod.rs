@@ -169,19 +169,6 @@ pub struct ApiService {
     pub quality: RwLock<AudioQuality>,
 }
 
-#[derive(Debug)]
-pub enum LikedTracksSync {
-    /// Server confirmed our stored revision (section has no `values`):
-    /// nothing to apply, keep the cached snapshot unchanged.
-    Unchanged,
-    Changed {
-        revision: u64,
-        /// Base track ids (strings in the API payload, e.g. `"156189026"`).
-        liked_track_ids: Vec<String>,
-        disliked_track_ids: Vec<String>,
-    },
-}
-
 #[derive(Clone, Debug)]
 pub struct TrackStreamInfo {
     pub url: String,
@@ -941,65 +928,6 @@ impl ApiService {
         let library = self.client.get_liked_tracks(&opts).await?;
 
         Ok(library.tracks.into_iter().map(|t| t.id).collect())
-    }
-
-    /// Revision-gated collection sync for liked tracks (mirrors the official
-    /// desktop client): with a known `revision` the server answers
-    /// `likedTracks: {info: {...}}` with **no `values`** when nothing changed
-    /// (verified against the real API); the official client guards on exactly
-    /// that shape. The bundled `yandex-music` crate instead requires `values`
-    /// in every present section, so this parses the response here and reports
-    /// `Unchanged` itself. Missing storage revision (`None`) sends
-    /// `allValuesRequired: true` for the full snapshot.
-    pub async fn sync_liked_tracks_collection(
-        &self,
-        revision: Option<u64>,
-    ) -> Result<LikedTracksSync> {
-        let option = match revision {
-            Some(rev) => serde_json::json!({ "revision": rev }),
-            None => serde_json::json!({ "allValuesRequired": true }),
-        };
-        let body = serde_json::json!({ "likedTracks": option });
-        let response: serde_json::Value = send_with_retry(|| {
-            self.client
-                .inner
-                .post("https://api.music.yandex.net/collection/sync")
-                .json(&body)
-        })
-        .await?
-        .json()
-        .await?;
-
-        let section = &response["result"]["values"]["likedTracks"];
-        let revision = section["info"]["revision"].as_u64();
-
-        // Current revision: section is present but has no `values` key.
-        let Some(values) = section.get("values") else {
-            return Ok(LikedTracksSync::Unchanged);
-        };
-        let revision =
-            revision.ok_or("likedTracks section carries no info.revision despite `values`")?;
-
-        let parse_ids = |key: &str| -> Vec<String> {
-            values[key]
-                .as_array()
-                .map(|rows| {
-                    rows.iter()
-                        .filter_map(|row| match &row["trackId"] {
-                            serde_json::Value::String(id) => Some(id.clone()),
-                            serde_json::Value::Number(n) => Some(n.to_string()),
-                            _ => None,
-                        })
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
-
-        Ok(LikedTracksSync::Changed {
-            revision,
-            liked_track_ids: parse_ids("liked"),
-            disliked_track_ids: parse_ids("disliked"),
-        })
     }
 }
 
