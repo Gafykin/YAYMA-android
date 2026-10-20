@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:material_ui/material_ui.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/features/core/providers/navigation_provider.dart';
+import 'package:yayma/src/features/core/providers/graphics_profile_provider.dart';
 import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/views/widgets/app_cover.dart';
 import 'package:yayma/src/features/core/views/widgets/hover_scale.dart';
@@ -35,10 +36,12 @@ class _HomeCoverWidgetState extends State<HomeCoverWidget> {
         if (isNarrow && !showLyrics) size = width * 0.75;
 
         if (Platform.isAndroid) {
-          return _AndroidCarousel(size: size);
+          return _CoverGlow(size: size, child: _AndroidCarousel(size: size));
         }
 
-        return HoverScale(
+        return _CoverGlow(
+          size: size,
+          child: HoverScale(
           hoverScale: 1.035,
           duration: const Duration(milliseconds: 400),
           cursor: meta.albumId != null
@@ -81,6 +84,7 @@ class _HomeCoverWidgetState extends State<HomeCoverWidget> {
                 ),
               ),
             ),
+          ),
           ),
         );
       },
@@ -417,6 +421,59 @@ class _CarouselCard extends StatelessWidget {
           radius: size * (32 / 360),
         ),
       ),
+    );
+  }
+}
+
+
+/// Мягкое цветное свечение под обложкой (профиль «Максимум»).
+class _CoverGlow extends StatelessWidget {
+  final double size;
+  final Widget child;
+
+  const _CoverGlow({required this.size, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return SignalBuilder(
+      builder: (context) {
+        if (!coverGlowEnabledSignal.value) return child;
+        final color =
+            (colorSchemeSignal.value ?? Theme.of(context).colorScheme).primary;
+        return Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: IgnorePointer(
+                child: RepaintBoundary(
+                  child: Center(
+                    child: TweenAnimationBuilder<Color?>(
+                      tween: ColorTween(end: color),
+                      duration: const Duration(milliseconds: 800),
+                      builder: (context, animated, _) => Container(
+                        width: size * 0.82,
+                        height: size * 0.82,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(AppRadius.xxxl),
+                          boxShadow: [
+                            BoxShadow(
+                              color: (animated ?? color).withValues(alpha: 0.5),
+                              blurRadius: 70,
+                              spreadRadius: 6,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            child,
+          ],
+        );
+      },
     );
   }
 }
