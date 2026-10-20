@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:yayma/src/app/session.dart';
 import 'package:yayma/src/features/core/providers/navigation_provider.dart';
+import 'package:yayma/src/features/core/providers/graphics_profile_provider.dart';
 import 'package:yayma/src/features/core/providers/visual_effects_provider.dart';
 import 'package:yayma/src/features/library/providers/library_provider.dart';
 import 'package:yayma/src/features/playback/providers/audio_focus_manager.dart';
@@ -42,6 +43,8 @@ class AppInit {
       vibeRenderScaleSignal.value = settings.vibeRenderScale;
       blurEffectsEnabledSignal.value = settings.blurEffectsEnabled;
     } on Object catch (_) {}
+
+    await GraphicsProfileController.initialize(appDir.path);
 
     unawaited(_initializeAuthAndServices());
   }
