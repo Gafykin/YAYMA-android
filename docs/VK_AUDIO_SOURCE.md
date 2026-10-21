@@ -1,6 +1,6 @@
 # VK Audio source integration
 
-Status: implementation plan / review scaffold. This document does not claim that VK playback is already implemented.
+Status: initial UI integration committed; validation and durable playback support remain incomplete.
 
 ## Goal
 
@@ -18,10 +18,10 @@ Therefore the first iteration should reuse these paths rather than introduce a p
 ## Proposed UX
 
 1. Keep **Подменить аудио…** in the existing track menu.
-2. Add a source choice in that dialog: direct audio URL (current behavior) or VK audio item.
-3. For VK, accept an audio item reference such as `owner_id_audio_id` and show a clear connection/token state.
-4. Add a small VK section in existing settings for the user's VK audio API token and matching User-Agent. Never request or store the account password in YAYMA.
-5. Keep Yandex as the fallback if VK resolution or streaming fails.
+2. The existing dialog now offers direct URL or VK Audio.
+3. VK mode accepts an item ID (`owner_id_audio_id`), token, and User-Agent, then resolves the item through `audio.getById`.
+4. The token and User-Agent are held only in the dialog while the lookup runs; YAYMA does not request the account password or persist the token.
+5. The resolved direct audio URL is saved using the existing override API. The stream manager falls back to Yandex if playback fails.
 
 ## Integration boundary
 
@@ -37,9 +37,9 @@ Do not attempt to resolve a VK share/page URL by treating it as an MP3 URL. VK a
 ## Implementation checklist
 
 - [ ] Add a Rust VK audio client with bounded request timeouts, status/error parsing, and tests using mocked JSON responses.
-- [ ] Add an explicit configuration DTO for token and User-Agent; persist secrets using platform-secure storage rather than plain settings JSON.
-- [ ] Resolve VK audio item IDs to stream URLs and normalize metadata needed by the existing override pipeline.
-- [ ] Extend the existing replacement dialog with a VK-item mode, without changing the main player layout.
+- [ ] Replace one-time URL resolution with refresh-on-play; VK stream URLs may expire or be IP-bound. Keep tokens out of plain settings storage.
+- [x] Resolve a VK audio item ID to a URL and pass it to the existing override pipeline (initial MVP).
+- [x] Extend the existing replacement dialog with a VK-item mode, without changing the main player layout.
 - [ ] Make VK overrides take precedence only for the selected Yandex track; preserve the existing manual URL override priority.
 - [ ] Keep Yandex fallback behavior on HTTP, API, decode, or codec failures.
 - [ ] Ensure tokens, authorization headers, and audio URLs are redacted from logs.
@@ -49,6 +49,6 @@ Do not attempt to resolve a VK share/page URL by treating it as an MP3 URL. VK a
 ## Compatibility and limitations
 
 - `vodka2/vk-audio-token` is PHP and its upstream token acquisition is based on unofficial/private VK client flows; it cannot be imported directly into this Rust project.
-- VK API behavior and audio URL formats can change independently of YAYMA.
+- VK API behavior and audio URL formats can change independently of YAYMA. The current MVP saves the resolved URL, which may expire; if that happens, playback should fall back to Yandex and the user must set the replacement again.
 - Only play audio the user is entitled to access. This integration must not bypass access controls or attempt to access private audio.
 - Preserve the upstream MIT license notice if any code is eventually copied; do not copy implementation code as part of this planning document.
