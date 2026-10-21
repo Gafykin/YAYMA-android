@@ -29,7 +29,7 @@ The upstream `vodka2/vk-audio-token` repository is a PHP library, not a Rust/Flu
 
 For a mobile-first implementation, prefer one of these explicit paths:
 
-- **User-supplied token (preferred first slice):** the user obtains a token outside YAYMA, pastes it into settings, and YAYMA only uses it for audio lookups. This avoids embedding a password-based login flow or brittle Android/GMS emulation.
+- **User-supplied token (preferred first slice):** the user obtains a token outside YAYMA and enters it into the existing track-replacement dialog for a single lookup. This avoids embedding a password-based login flow or brittle Android/GMS emulation.
 - **Separate optional helper:** if automatic token acquisition is later required, isolate it behind a separately deployed helper with an explicit trust boundary. Do not send VK passwords to a server silently.
 
 Do not attempt to resolve a VK share/page URL by treating it as an MP3 URL. VK audio API responses may require additional URL decoding or client-specific handling, and must be validated against real responses before being used for streaming.
