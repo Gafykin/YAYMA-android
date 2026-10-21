@@ -373,7 +373,55 @@ class _TrackOverrideDialogState extends State<TrackOverrideDialog> {
     final audioId = _vkIdController.text.trim();
     final token = _vkTokenController.text.trim();
     final userAgent = _vkUserAgentController.text.trim();
-    if (!RegExp(r'^-?\\d+_\\d+(?:_[A-Za-z0-9]+)?
+    if (!RegExp(r'^-?\d+_\d+(?:_[A-Za-z0-9]+)?$').hasMatch(audioId)) {
+      throw const FormatException('ID должен иметь формат owner_id_audio_id');
+    }
+    if (token.isEmpty || userAgent.isEmpty) {
+      throw const FormatException('Укажи VK-токен и User-Agent');
+    }
+
+    final uri = Uri.https('api.vk.com', '/method/audio.getById', {
+      'access_token': token,
+      'audios': audioId,
+      'v': '5.95',
+    });
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 12);
+    try {
+      final request = await client.getUrl(uri).timeout(const Duration(seconds: 12));
+      request.headers.set(HttpHeaders.userAgentHeader, userAgent);
+      final response = await request.close().timeout(const Duration(seconds: 15));
+      final body = await response.transform(utf8.decoder).join().timeout(
+        const Duration(seconds: 15),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('VK вернул HTTP ' + response.statusCode.toString());
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Неожиданный ответ VK');
+      }
+      if (decoded['error'] is Map) {
+        final error = decoded['error'] as Map;
+        final code = error['error_code'] ?? '?';
+        final message = error['error_msg'] ?? 'неизвестная ошибка';
+        throw FormatException('VK API ' + code.toString() + ': ' + message.toString());
+      }
+      final items = decoded['response'];
+      if (items is! List || items.isEmpty || items.first is! Map) {
+        throw const FormatException('VK не вернул аудиозапись');
+      }
+      final audioUrl = (items.first as Map)['url'];
+      if (audioUrl is! String || !audioUrl.startsWith('https://')) {
+        throw const FormatException(
+          'Для этой записи VK не вернул доступную HTTPS-ссылку',
+        );
+      }
+      return audioUrl;
+    } finally {
+      client.close(force: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
