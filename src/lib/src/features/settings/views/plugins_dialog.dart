@@ -343,7 +343,7 @@ class _TrackOverrideDialogState extends State<TrackOverrideDialog> {
     setState(() {
       _hasOverride = current != null;
       _controller.text = current ?? '';
-      _source = (current != null && current.startsWith('https://')) ? 'url' : 'url';
+      _source = 'url';
       _loading = false;
     });
   }
