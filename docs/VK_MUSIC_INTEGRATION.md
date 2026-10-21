@@ -6,7 +6,7 @@ Branch feature/vk-audio-source contains only an MVP for manual audio replacement
 
 ## Screenshot error: AppError.invalidToken()
 
-This screen alone does not prove the issue is VK-related. It may be the current Yandex Music session token error. The VK token in the MVP is only used after opening the replacement dialog. Authentication errors must be handled per provider so a VK token cannot break Yandex startup or session state.
+The Rust source confirms that AppError::InvalidToken is returned by login_with_token when TokenProvider::validate fails. That validator creates a Yandex Music client and calls get_account_status(), so this error is from Yandex Music authentication, not the VK token used in the replacement dialog. The stored Yandex token may be expired, malformed, or rejected by Yandex. The app should guide the user to re-enter a valid Yandex token; diagnosis should not be attributed to VK.
 
 ## Architecture
 
