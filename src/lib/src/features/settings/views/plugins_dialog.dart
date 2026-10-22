@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -313,6 +314,11 @@ class TrackOverrideDialog extends StatefulWidget {
 
 class _TrackOverrideDialogState extends State<TrackOverrideDialog> {
   final _controller = TextEditingController();
+  final _vkIdController = TextEditingController();
+  final _vkTokenController = TextEditingController();
+  final _vkUserAgentController = TextEditingController();
+  String _source = 'url';
+  bool _saving = false;
   bool _loading = true;
   bool _hasOverride = false;
 
@@ -325,6 +331,9 @@ class _TrackOverrideDialogState extends State<TrackOverrideDialog> {
   @override
   void dispose() {
     _controller.dispose();
+    _vkIdController.dispose();
+    _vkTokenController.dispose();
+    _vkUserAgentController.dispose();
     super.dispose();
   }
 
@@ -334,17 +343,241 @@ class _TrackOverrideDialogState extends State<TrackOverrideDialog> {
     setState(() {
       _hasOverride = current != null;
       _controller.text = current ?? '';
+      _source = 'url';
       _loading = false;
     });
   }
 
   Future<void> _save(String? url) async {
-    final result = await rust.pluginSetTrackOverride(
-      trackId: widget.trackId,
-      url: url,
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      var resolvedUrl = url;
+      if (url != null && _source == 'vk') {
+        resolvedUrl = await _resolveVkAudioUrl();
+      }
+      final result = await rust.pluginSetTrackOverride(
+        trackId: widget.trackId,
+        url: resolvedUrl,
+      );
+      _notify(result);
+      if (result.ok && mounted) Navigator.pop(context);
+    } on Object catch (e) {
+      if (mounted) showAppError('Не удалось получить аудио VK: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<String> _resolveVkAudioUrl() async {
+    final audioId = _vkIdController.text.trim();
+    final token = _vkTokenController.text.trim();
+    final userAgent = _vkUserAgentController.text.trim();
+    if (!RegExp(r'^-?\d+_\d+(?:_[A-Za-z0-9]+)?$').hasMatch(audioId)) {
+      throw const FormatException('ID должен иметь формат owner_id_audio_id');
+    }
+    if (token.isEmpty || userAgent.isEmpty) {
+      throw const FormatException('Укажи VK-токен и User-Agent');
+    }
+
+    final uri = Uri.https('api.vk.com', '/method/audio.getById', {
+      'access_token': token,
+      'audios': audioId,
+      'v': '5.95',
+    });
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 12);
+    try {
+      final request = await client.getUrl(uri).timeout(const Duration(seconds: 12));
+      request.headers.set(HttpHeaders.userAgentHeader, userAgent);
+      final response = await request.close().timeout(const Duration(seconds: 15));
+      final body = await response.transform(utf8.decoder).join().timeout(
+        const Duration(seconds: 15),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('VK вернул HTTP ' + response.statusCode.toString());
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Неожиданный ответ VK');
+      }
+      if (decoded['error'] is Map) {
+        final error = decoded['error'] as Map;
+        final code = error['error_code'] ?? '?';
+        final message = error['error_msg'] ?? 'неизвестная ошибка';
+        throw FormatException('VK API ' + code.toString() + ': ' + message.toString());
+      }
+      final items = decoded['response'];
+      if (items is! List || items.isEmpty || items.first is! Map) {
+        throw const FormatException('VK не вернул аудиозапись');
+      }
+      final audioUrl = (items.first as Map)['url'];
+      if (audioUrl is! String || !audioUrl.startsWith('https://')) {
+        throw const FormatException(
+          'Для этой записи VK не вернул доступную HTTPS-ссылку',
+        );
+      }
+      return audioUrl;
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return AppDialog(
+      title: 'Подмена аудио',
+      titleIcon: Icons.swap_horiz_rounded,
+      titleStyle: TextStyle(
+        color: cs.onSurface,
+        fontWeight: FontWeight.bold,
+        fontSize: 18,
+      ),
+      contentWidth: 460,
+      content: _loading
+          ? const SizedBox(
+              height: 100,
+              child: Center(child: M3ELoadingIndicator()),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Выбери источник аудио для замены. Изменение вступит в силу '
+                  'при следующем запуске трека.',
+                  style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: _source,
+                  decoration: _fieldDecoration(cs, 'Источник аудио'),
+                  items: const [
+                    DropdownMenuItem(value: 'url', child: Text('Прямая ссылка')),
+                    DropdownMenuItem(value: 'vk', child: Text('VK Audio')),
+                  ],
+                  onChanged: _saving
+                      ? null
+                      : (value) => setState(() => _source = value ?? 'url'),
+                ),
+                const SizedBox(height: 12),
+                if (_source == 'url')
+                  TextField(
+                    controller: _controller,
+                    keyboardType: TextInputType.url,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: _fieldDecoration(cs, 'https://…/track.mp3'),
+                  )
+                else ...[
+                  TextField(
+                    controller: _vkIdController,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: _fieldDecoration(cs, 'ID VK: owner_id_audio_id'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _vkTokenController,
+                    obscureText: true,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: _fieldDecoration(cs, 'VK Audio API token'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _vkUserAgentController,
+                    autocorrect: false,
+                    style: TextStyle(color: cs.onSurface),
+                    decoration: _fieldDecoration(cs, 'User-Agent из токен-клиента'),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Токен используется только для запроса и не сохраняется '
+                    'приложением. VK может выдавать временные аудиоссылки: '
+                    'если они истекут, подмена вернётся к оригиналу.',
+                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+                  ),
+                ],
+              ],
+            ),
+      actions: [
+        AppDialog.cancelButton(context),
+        if (_hasOverride)
+          TextButton(
+            onPressed: _loading || _saving ? null : () => unawaited(_save(null)),
+            child: const Text('Вернуть оригинал'),
+          ),
+        ElevatedButton(
+          onPressed: _loading || _saving
+              ? null
+              : () => unawaited(
+                  _save(_source == 'url' ? _controller.text.trim() : 'vk://resolve'),
+                ),
+          child: Text(_saving ? 'Получение…' : 'Сохранить'),
+        ),
+      ],
     );
-    _notify(result);
-    if (result.ok && mounted) Navigator.pop(context);
+  }
+}
+).hasMatch(audioId)) {
+      throw const FormatException('ID должен иметь формат owner_id_audio_id');
+    }
+    if (token.isEmpty || userAgent.isEmpty) {
+      throw const FormatException('Укажи VK-токен и User-Agent');
+    }
+
+    final uri = Uri.https('api.vk.com', '/method/audio.getById', {
+      'access_token': token,
+      'audios': audioId,
+      'v': '5.199',
+    });
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
+    try {
+      final request = await client.getUrl(uri).timeout(const Duration(seconds: 12));
+      request.headers.set(HttpHeaders.userAgentHeader, userAgent);
+      final response = await request.close().timeout(const Duration(seconds: 15));
+      final body = await response.transform(utf8.decoder).join().timeout(
+        const Duration(seconds: 15),
+      );
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw HttpException('VK вернул HTTP ${response.statusCode}');
+      }
+      final decoded = jsonDecode(body);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Неожиданный ответ VK');
+      }
+      if (decoded['error'] is Map) {
+        final error = decoded['error'] as Map;
+        final code = error['error_code'] ?? '?';
+        final message = error['error_msg'] ?? 'неизвестная ошибка';
+        throw FormatException('VK API ${code}: ${message}');
+      }
+      final items = decoded['response'];
+      if (items is! List || items.isEmpty || items.first is! Map) {
+        throw const FormatException('VK не вернул аудиозапись');
+      }
+      final audioUrl = (items.first as Map)['url'];
+      if (audioUrl is! String || !audioUrl.startsWith('https://')) {
+        throw const FormatException(
+          'Для этой записи VK не вернул доступную HTTPS-ссылку',
+        );
+      }
+      return audioUrl;
+    } finally {
+      client.close(force: true);
+    }
   }
 
   @override
