@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:m3e_core/m3e_core.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:yayma/src/features/core/providers/notification_provider.dart';
 import 'package:yayma/src/features/core/theme/app_tokens.dart';
 import 'package:yayma/src/features/core/views/widgets/common_ui.dart';
+import 'package:yayma/src/features/settings/services/pext_archive.dart';
 import 'package:yayma/src/rust/api/plugins.dart' as rust;
 
 InputDecoration _fieldDecoration(ColorScheme cs, String hint) {
@@ -31,7 +34,7 @@ void _notify(rust.PluginActionDto result) {
 }
 
 /// Управление плагинами: список, включение/выключение, обновление, удаление,
-/// установка по ссылке или из JSON-файла.
+/// установка по ссылке, из JSON-файла или из файла аддона `.pext` (FckCensor).
 ///
 /// Плагин подменяет аудиофайл трека по списку «id трека → ссылка на mp3».
 class PluginsDialog extends StatefulWidget {
@@ -113,24 +116,64 @@ class _PluginsDialogState extends State<PluginsDialog> {
     await _run(() => rust.pluginInstallFromUrl(url: url));
   }
 
-  /// Готовый список замен сообщества FckCensor (формат {"tracks": {id: mp3}}).
-  static const _fckCensorUrl =
-      'https://raw.githubusercontent.com/Hazzz895/FckCensorData/refs/heads/main/list.json';
+  /// Аддон FckCensor v2.0.0 встроен в приложение (assets/addons/FckCensor.pext):
+  /// файл выбирать не нужно, список замен скачивается из интернета.
+  static const _fckCensorAsset = 'assets/addons/FckCensor.pext';
 
-  Future<void> _installFckCensor() =>
-      _run(() => rust.pluginInstallFromUrl(url: _fckCensorUrl));
+  Future<void> _installFckCensor() async {
+    await _run(() async {
+      final data = await rootBundle.load(_fckCensorAsset);
+      return _installPextBytes(
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+      );
+    });
+  }
+
+  /// Файл аддона `.pext` (zip с `metadata.json` и `script.js`), например FckCensor.
+  /// Скрипт аддона не запускается — из него берётся только адрес списка замен.
+  Future<rust.PluginActionDto> _installPextBytes(Uint8List bytes) async {
+    String? metadata;
+    String? script;
+    try {
+      final archive = PextArchive.parse(bytes);
+      metadata = archive.readText('metadata.json');
+      script = archive.readText('script.js');
+    } on FormatException catch (e) {
+      return rust.PluginActionDto(ok: false, message: e.message);
+    } on RangeError {
+      return rust.PluginActionDto(ok: false, message: 'Архив .pext повреждён');
+    }
+    if (metadata == null || script == null) {
+      return rust.PluginActionDto(
+        ok: false,
+        message: 'В .pext нет metadata.json или script.js',
+      );
+    }
+    return rust.pluginInstallFromPext(metadataJson: metadata, scriptJs: script);
+  }
 
   Future<void> _installFromFile() async {
-    final files = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
-    if (files.isEmpty || files.single.path == null) return;
+    // FileType.any: расширение .pext системе неизвестно, и при фильтре по
+    // расширениям такие файлы в выборе были бы недоступны.
+    final files = await FilePicker.pickFiles();
+    if (files.isEmpty) return;
     final file = files.single;
-    await _run(() async {
-      final json = await File(file.path!).readAsString();
-      return rust.pluginInstallFromJson(json: json, fileName: file.name);
-    });
+    final path = file.path;
+    if (path == null) {
+      showAppError('Не удалось получить доступ к файлу «${file.name}»');
+      return;
+    }
+    final name = file.name.toLowerCase();
+    if (name.endsWith('.pext')) {
+      await _run(() async => _installPextBytes(await File(path).readAsBytes()));
+    } else if (name.endsWith('.json')) {
+      await _run(() async {
+        final json = await File(path).readAsString();
+        return rust.pluginInstallFromJson(json: json, fileName: file.name);
+      });
+    } else {
+      showAppError('Нужен файл аддона .pext (например, FckCensor) или .json');
+    }
   }
 
   Widget _pluginTile(ColorScheme cs, rust.PluginDto plugin) {
@@ -232,7 +275,9 @@ class _PluginsDialogState extends State<PluginsDialog> {
               children: [
                 Text(
                   'Плагин подменяет аудиофайл трека по списку «id трека → '
-                  'ссылка на mp3» (как аддон FckCensor). Формат файла: '
+                  'ссылка на mp3» (как аддон FckCensor). Кнопка «FckCensor» '
+                  'подключает встроенный аддон; можно также выбрать свой файл '
+                  '.pext или список в формате '
                   '{"id трека": "https://…/файл.mp3"}. Подключайте только '
                   'списки, которым доверяете. Ручную замену для одного '
                   'трека можно задать в его меню «три точки».',
@@ -257,7 +302,7 @@ class _PluginsDialogState extends State<PluginsDialog> {
                     OutlinedButton.icon(
                       onPressed: _busy ? null : () => unawaited(_installFromFile()),
                       icon: const Icon(Icons.upload_file_rounded),
-                      label: const Text('Из файла'),
+                      label: const Text('Из файла (.pext / .json)'),
                     ),
                   ],
                 ),
